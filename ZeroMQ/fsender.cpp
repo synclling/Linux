@@ -19,8 +19,8 @@ int read_file(char *filename, int pos, char *buffer, int length)
     FILE *fp = fopen(filename, "rb");
     if (fp == NULL) 
     {
-	printf("fopen failed\n");
-	return -1;
+		printf("fopen failed\n");
+		return -1;
     }
 
     fseek(fp, pos, SEEK_SET);
@@ -28,7 +28,7 @@ int read_file(char *filename, int pos, char *buffer, int length)
     int size = fread(buffer, 1, length, fp);
     if (size != length) 
     {
-	printf("read file end\n");
+		printf("read file end\n");
     }
 
 _exit:
@@ -41,14 +41,14 @@ int main(int argc, char** argv)
 {
     if (argc != 2)
     {
-	std::cout << "please useage " << argv[0] <<" <file path>" << std::endl;
-	return -1;
+		std::cout << "please useage " << argv[0] <<" <file path>" << std::endl;
+		return -1;
     }
 	
     if (0 != access(argv[1], R_OK))
     {
-	std::cout << "input file is not exist "<< argv[1] << std::endl;
-	return -1;
+		std::cout << "input file is not exist "<< argv[1] << std::endl;
+		return -1;
     }
 	
     zmq::context_t context(1);  // 初始化zmq上下文
@@ -77,7 +77,7 @@ int main(int argc, char** argv)
 	    rpos += size;
 	    if (size < 0)
 	    {
-                std::cout << "read file content failed." << std::endl;
+            std::cout << "read file content failed." << std::endl;
 	        socket.send(NULL, 0, 0);
 	        break;
 	    }

@@ -42,7 +42,7 @@ int main ()
 	        memcpy(&fh.file_path, file_pkt.data(), fh.file_path_len);
 	        std::cout << "received file path " << fh.file_path << std::endl;
 	    
-                FILE *fp = fopen(fh.file_path, "wb+");
+            FILE *fp = fopen(fh.file_path, "wb+");
 	    	if (NULL == fp)
 	    	{
 	    		std::cout << "fopen "<< fh.file_path <<" file failed." << std::endl;
