@@ -31,17 +31,22 @@
 #define BUFFER_SIZE		4096
 
 
-char *host_to_ip(const char *hostname) {
+char *host_to_ip(const char *hostname)
+{
 
 	struct hostent *host_entry = gethostbyname(hostname);
-	if (host_entry) {
+	if (host_entry)
+	{
 		return inet_ntoa(*(struct in_addr*)*host_entry->h_addr_list);
-	} else {
+	}
+	else
+	{
 		return NULL;
 	}
 }
 
-int http_create_socket( char *ip) {
+int http_create_socket( char *ip)
+{
 
 	int sockfd = socket(AF_INET, SOCK_STREAM, 0);
 
@@ -50,7 +55,8 @@ int http_create_socket( char *ip) {
 	sin.sin_port = htons(80);
 	sin.sin_family = AF_INET;
 
-	if (-1 == connect(sockfd, (struct sockaddr*)&sin, sizeof(struct sockaddr_in))) {
+	if (-1 == connect(sockfd, (struct sockaddr*)&sin, sizeof(struct sockaddr_in)))
+	{
 		return -1;
 	}
 
@@ -61,7 +67,8 @@ int http_create_socket( char *ip) {
 }
 
 
-char *http_send_request(int sockfd, const char *hostname, const char *resource) {
+char *http_send_request(int sockfd, const char *hostname, const char *resource)
+{
 
 	char buffer[BUFFER_SIZE] = {0};
 	
@@ -88,12 +95,16 @@ Host: %s\r\n\
 	char *result = malloc(sizeof(int));
 	result[0] = '\0';
 
-	while (1) {
+	while (1)
+	{
 
 		int selection = select(sockfd+1, &fdread, NULL, NULL, &tv);
-		if (!selection || !(FD_ISSET(sockfd, &fdread))) {
+		if (!selection || !(FD_ISSET(sockfd, &fdread)))
+		{
 			break;
-		} else {
+		}
+		else
+		{
 			len = recv(sockfd, buffer, BUFFER_SIZE, 0);
 			if (len == 0) break;
 
@@ -107,13 +118,15 @@ Host: %s\r\n\
 }
 
 
-int http_client_commit(const char *hostname, const char *resource) {
+int http_client_commit(const char *hostname, const char *resource)
+{
 	char *ip = host_to_ip(hostname);
 
 	int sockfd = http_create_socket(ip);
 
 	char *content =  http_send_request(sockfd, hostname, resource);
-	if (content == NULL) {
+	if (content == NULL)
+	{
 		printf("have no data\n");
 	}
 
@@ -129,25 +142,29 @@ int http_client_commit(const char *hostname, const char *resource) {
 typedef void (*async_result_cb)(const char *hostname, const char *result);
 
 
-struct ep_arg {
+struct ep_arg
+{
 	int sockfd;
 	char hostname[HOSTNAME_LENGTH];
 	async_result_cb cb;
 };
 
 
-struct async_context {
+struct async_context
+{
 	int epfd;
 	pthread_t thread_id;
 };
 
-struct http_request {
+struct http_request
+{
 	char *hostname;
 	char *resource;
 };
 
 
-int http_async_client_commit(struct async_context *ctx, const char *hostname, const char *resource, async_result_cb cb) {
+int http_async_client_commit(struct async_context *ctx, const char *hostname, const char *resource, async_result_cb cb)
+{
 
 	char *ip = host_to_ip(hostname);
 	if (ip == NULL) return -1;
@@ -159,7 +176,8 @@ int http_async_client_commit(struct async_context *ctx, const char *hostname, co
 	sin.sin_port = htons(80);
 	sin.sin_family = AF_INET;
 
-	if (-1 == connect(sockfd, (struct sockaddr*)&sin, sizeof(struct sockaddr_in))) {
+	if (-1 == connect(sockfd, (struct sockaddr*)&sin, sizeof(struct sockaddr_in)))
+	{
 		return -1;
 	}
 
@@ -195,29 +213,38 @@ Host: %s\r\n\
 
 }
 
-static void *http_async_client_callback(void *arg) {
+static void *http_async_client_callback(void *arg)
+{
 
 	struct async_context *ctx = (struct async_context*)arg;
 	int epfd = ctx->epfd;
 
-	while (1) {
+	while (1) 
+	{
 
 		struct epoll_event events[ASYNC_CLIENT_NUM] = {0};
 
 		int nready = epoll_wait(epfd, events, ASYNC_CLIENT_NUM, -1);
-		if (nready < 0) {
-			if (errno == EINTR || errno == EAGAIN) {
+		if (nready < 0)
+		{
+			if (errno == EINTR || errno == EAGAIN)
+			{
 				continue;
-			} else {
+			}
+			else
+			{
 				break;
 			}
-		} else if (nready == 0) {
+		}
+		else if (nready == 0)
+		{
 			continue;
 		}
 
 		printf("nready:%d\n", nready);
 		int i = 0;
-		for (i = 0;i < nready;i ++) {
+		for (i = 0;i < nready;i ++)
+		{
 
 			struct ep_arg *data = (struct ep_arg*)events[i].data.ptr;
 			int sockfd = data->sockfd;
@@ -242,20 +269,23 @@ static void *http_async_client_callback(void *arg) {
 
 }
 
-struct async_context *http_async_client_init(void) {
+struct async_context *http_async_client_init(void)
+{
 
 	int epfd = epoll_create(1); // 
 	if (epfd < 0) return NULL;
 
 	struct async_context *ctx = calloc(1, sizeof(struct async_context));
-	if (ctx == NULL) {
+	if (ctx == NULL)
+	{
 		close(epfd);
 		return NULL;
 	}
 	ctx->epfd = epfd;
 
 	int ret = pthread_create(&ctx->thread_id, NULL, http_async_client_callback, ctx);
-	if (ret) {
+	if (ret)
+	{
 		perror("pthread_create");
 		return NULL;
 	}
@@ -265,7 +295,8 @@ struct async_context *http_async_client_init(void) {
 
 }
 
-int http_async_client_uninit(struct async_context *ctx) {
+int http_async_client_uninit(struct async_context *ctx)
+{
 
 	close(ctx->epfd);
 	pthread_cancel(ctx->thread_id);
@@ -289,21 +320,22 @@ struct http_request reqs[] = {
 };
 
 
-static void http_async_client_result_callback(const char *hostname, const char *result) {
-	
+static void http_async_client_result_callback(const char *hostname, const char *result)
+{
 	printf("hostname:%s, result:%s\n\n\n\n", hostname, result);
-	
 }
 
 
 
-int main(int argc, char *argv[]) {
+int main(int argc, char *argv[])
+{
 
 #if 1
 	
 	int count = sizeof(reqs) / sizeof(reqs[0]);
 	int i = 0;
-	for (i = 0;i < count;i ++) {
+	for (i = 0;i < count;i ++)
+	{
 		http_client_commit(reqs[i].hostname, reqs[i].resource);
 	}
 	
@@ -314,7 +346,8 @@ int main(int argc, char *argv[]) {
 
 	int count = sizeof(reqs) / sizeof(reqs[0]);
 	int i = 0;
-	for (i = 0;i < count;i ++) {
+	for (i = 0;i < count;i ++)
+	{
 		http_async_client_commit(ctx, reqs[i].hostname, reqs[i].resource, http_async_client_result_callback);
 	}
 
