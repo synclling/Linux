@@ -31,9 +31,8 @@ char *http_host_to_ip(const char *hostname)
 int http_create_socket(const char *ip)
 {
     int sockfd = socket(AF_INET, SOCK_STREAM, 0);
-    if(sockfd == -1)
+    if(sockfd < 0)
     {
-        perror("create socket error.");
         return -1;
     }
 
@@ -44,9 +43,8 @@ int http_create_socket(const char *ip)
     serveraddr.sin_port = htons(80);
 
     int ret = connect(sockfd, (struct sockaddr *)&serveraddr, sizeof(struct sockaddr_in));
-    if(ret == -1)
+    if(ret < 0)
     {
-        perror("connect error.");
         return -1;
     }
 
@@ -64,9 +62,7 @@ int http_send_request(int sockfd, const char *hostname, const char *resource)
     send(sockfd, buffer, strlen(buffer), 0);
 
     memset(buffer, '\0', BUFFER_SIZE);
-
     recv(sockfd, buffer, BUFFER_SIZE, 0);
-
     printf("recv: %s\n", buffer);
 
     return 0;
@@ -75,8 +71,19 @@ int http_send_request(int sockfd, const char *hostname, const char *resource)
 int http_client_commit(const char *hostname, const char *resource)
 {
     char *ip = http_host_to_ip(hostname);
-    printf("ip: %s\n", ip);
+	if(ip == NULL)
+	{
+		printf("ip error.\n");
+		return -1;
+	}
+	
     int sockfd = http_create_socket(ip);
+	if(sockfd < 0)
+	{
+		printf("socket error.\n");
+		return -1;
+	}
+	
     http_send_request(sockfd, hostname, resource);
 
     close(sockfd);
