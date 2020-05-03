@@ -165,8 +165,10 @@ int http_create_socket(const char *hostname)
 		printf("connect failed.\n");
         return -1;
     }
-
-    fcntl(sockfd, F_SETFL, O_NONBLOCK); // 设置套接字为非阻塞
+	
+	// int flag = fcntl(sockfd, F_GETFL, 0);
+	// flag |= O_NONBLOCK
+    // fcntl(sockfd, F_SETFL, flag); // 设置套接字为非阻塞
 
     return sockfd;
 }
@@ -175,13 +177,7 @@ int http_client_commit()
 {
 	int fd_max = 0;
 	int sockfd = -1;
-	
-	fd_set readset;
-	FD_ZERO(&readset);
-	
-	struct timeval tv;
-	tv.tv_sec = 5;
-	tv.tv_usec = 0;
+    char buffer[BUFFER_SIZE] = {0};
 	
     int count = sizeof(reqs) / sizeof(reqs[0]);
 	for(int i = 0; i < count; ++i)
@@ -197,23 +193,31 @@ int http_client_commit()
 		}
 		
 		reqs[i].sockfd = sockfd;
-		FD_SET(reqs[i].sockfd, &readset);
 		
 		if(reqs[i].sockfd > fd_max)
 		{
 			fd_max = reqs[i].sockfd;
 		}
 		
-		char buffer[BUFFER_SIZE] = {0};
 		sprintf(buffer, "GET %s %s\r\nHost: %s\r\n%s\r\n", reqs[i].resource, HTTP_VERSION, reqs[i].hostname, CONNECT_TYPE);
-
 		send(reqs[i].sockfd, buffer, strlen(buffer), 0);
 	}
 	
 	while(1)
 	{
-		int res = select(fd_max + 1, &readset, NULL, NULL, &tv);
-		if(res < 0) // 失败
+		struct timeval tv;
+		tv.tv_sec = 5;
+		tv.tv_usec = 0;
+		
+		fd_set readset;
+		FD_ZERO(&readset);
+		for(int i = 0; i < count; ++i)
+		{
+			FD_SET(reqs[i].sockfd, &readset);
+		}
+		
+		int ret = select(fd_max + 1, &readset, NULL, NULL, &tv);
+		if(ret < 0) // 失败
 		{
 			if(errno == EINTR)
 			{
@@ -224,7 +228,7 @@ int http_client_commit()
 				break;
 			}
 		}
-		else if(res == 0) // 超时
+		else if(ret == 0) // 超时
 		{
 			continue;
 		}
@@ -235,8 +239,11 @@ int http_client_commit()
 				if(FD_ISSET(reqs[i].sockfd, &readset))
 				{
 					memset(buffer, '\0', BUFFER_SIZE);
-					recv(reqs[i].sockfd, buffer, BUFFER_SIZE, 0);
-					printf("%s\n\n", buffer);
+					int size = recv(reqs[i].sockfd, buffer, BUFFER_SIZE, 0);
+                    if(size > 0)
+                    {
+                        printf("%s\n", buffer);
+                    }
 				}
 			}
 		}
@@ -251,11 +258,11 @@ int http_client_commit()
 }
 
 
-
 int main(int argc, char *argv[])
 {
 	http_client_commit();
 
     return 0;
 }
+
 #endif
