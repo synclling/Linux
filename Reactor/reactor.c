@@ -1,7 +1,19 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
 
+#include <sys/socket.h>
+#include <sys/epoll.h>
+#include <arpa/inet.h>
+
+#include <unistd.h>
+#include <errno.h>
+#include <fcntl.h>
 
 #define BUFFER_SIZE 4096
 #define MAX_EPOLL_EVENTS 1024
+#define SERVER_PORT	8888
 
 typedef int (*NCALLBACK)(int sockfd, int events, void *arg);
 
@@ -25,10 +37,14 @@ struct ntyreactor
 	struct ntyevent *events;
 };
 
-void nty_event_set(struct ntyevent* ev, int sockfd, int events, NCALLBACK cb, void *arg)
+int accept_cb(int sockfd, int events, void *arg);
+int recv_cb(int sockfd, int events, void *arg);
+int send_cb(int sockfd, int events, void *arg);
+
+void ntyevent_set(struct ntyevent* ev, int sockfd, int events, NCALLBACK cb, void *arg)
 {
 	ev->sockfd = sockfd;
-	ev->events = events;
+	ev->events = events; // EPOLLIN or EPOLLOUT
 	ev->flag = 0;	// init 0
 	ev->last_active = time(NULL);
 	
@@ -63,7 +79,7 @@ int ntyreactor_init(struct ntyreactor *reactor)
 	return 0;
 }
 
-int ntyreactor_add_event(struct ntyreactor *reactor, struct ntyevent *ev)
+int ntyreactor_add_event_to_epoll(struct ntyreactor *reactor, struct ntyevent *ev)
 {
 	if(reactor == NULL || ev == NULL)
 	{
@@ -88,7 +104,7 @@ int ntyreactor_add_event(struct ntyreactor *reactor, struct ntyevent *ev)
 	return 0;
 }
 
-int ntyreactor_del_event(struct ntyreactor *reactor, struct ntyevent *ev)
+int ntyreactor_del_event_from_epoll(struct ntyreactor *reactor, struct ntyevent *ev)
 {
 	if(reactor == NULL || ev == NULL)
 	{
@@ -113,21 +129,52 @@ int ntyreactor_del_event(struct ntyreactor *reactor, struct ntyevent *ev)
 	return 0;
 }
 
-int ntyreactor_run(struct ntyreactor *reactor)
+int ntyreactor_add_listener(struct ntyreactor *reactor, int sockfd, NCALLBACK accept_cb)
 {
-	if(reactor == NULL)
+	if(reactor == NULL || reactor->events == NULL)
 	{
 		return -1;
-	}
-	if(reactor->epfd < 0 || reactor->events == NULL)
+	};
+	
+	ntyevent_set(&reactor->events[sockfd], sockfd, EPOLLIN, accept_cb, (void *)reactor);
+	ntyreactor_add_event_to_epoll(reactor, &reactor->events[sockfd]);
+	
+	return 0;
+}
+
+int ntyreactor_run(struct ntyreactor *reactor)
+{
+	if(reactor == NULL || reactor->epfd < 0 || reactor->events == NULL)
 	{
 		return -1;
 	}
 	
+	struct epoll_event events[MAX_EPOLL_EVENTS];
+	
 	while(1)
 	{
+		int nfds = epoll_wait(reactor->epfd, events, MAX_EPOLL_EVENTS, 1000);
+		if(nfds < 0)
+		{
+			continue;
+		}
 		
+		for(int i = 0; i < nfds; ++i)
+		{
+			struct ntyevent *ev = (struct ntyevent *)events[i].data.ptr;
+			if((events[i].events & EPOLLIN) && (ev->events & EPOLLIN))
+			{
+				ev->cb(ev->sockfd, events[i].events, ev->arg);
+			}
+			
+			if((events[i].events & EPOLLOUT) && (ev->events & EPOLLOUT))
+			{
+				ev->cb(ev->sockfd, events[i].events, ev->arg);
+			}
+		}
 	}
+	
+	return 0;
 }
 
 int ntyreactor_destory(struct ntyreactor *reactor)
@@ -151,6 +198,9 @@ int init_socket(int port)
 		return -1;
 	}
 	
+	int flags = fcntl(sockfd, F_GETFL, 0);
+    fcntl(sockfd, F_SETFL, flags |= O_NONBLOCK); // 设置套接字为非阻塞
+	
 	struct sockaddr_in serveraddr;
 	memset(&serveraddr, 0, sizeof(struct sockaddr_in));
 	serveraddr.sin_family = AF_INET;
@@ -168,25 +218,114 @@ int init_socket(int port)
 	if(res < 0)
 	{
 		printf("listen failed: %s\n", strerror(errno));
-		return -3
+		return -3;
 	}
 	
 	return sockfd;
 }
 
+int accept_cb(int sockfd, int events, void *arg)
+{
+	struct ntyreactor *reactor = (struct ntyreactor *)arg;
+	if(reactor == NULL)
+	{
+		return -1;
+	}
+	
+	struct sockaddr_in clientaddr;
+	memset(&clientaddr, 0, sizeof(struct sockaddr_in));
+
+    socklen_t len = sizeof(clientaddr);
+	int clientfd = accept(sockfd, (struct sockaddr *)&clientaddr, &len);
+	if(clientfd < 0)
+	{
+		printf("accept failed: %s\n", strerror(errno));
+		return -2;
+	}
+	
+	int flags = fcntl(clientfd, F_GETFL, 0);
+    fcntl(clientfd, F_SETFL, flags |= O_NONBLOCK); // 设置套接字为非阻塞
+	
+	ntyevent_set(&reactor->events[clientfd], clientfd, EPOLLIN, recv_cb, (void *)reactor);
+	ntyreactor_add_event_to_epoll(reactor, &reactor->events[clientfd]);
+	
+	return 0;
+}
+
 int recv_cb(int sockfd, int events, void *arg)
 {
-	struct ntyreactor * reactor = (struct ntyreactor *)arg;
+	struct ntyreactor *reactor = (struct ntyreactor *)arg;
+	struct ntyevent *ev = &reactor->events[sockfd];
 	
+	int size = recv(sockfd, ev->buffer, BUFFER_SIZE, 0);
 	
+	ntyreactor_del_event_from_epoll(reactor, ev);
+	
+	if(size > 0)
+	{
+		ev->size = size;
+		ev->buffer[size] = '\0';
+		
+		printf("Client[%d]:%s\n", sockfd, ev->buffer);
+		
+		ntyevent_set(ev, sockfd, EPOLLOUT, send_cb, (void *)reactor);
+		ntyreactor_add_event_to_epoll(reactor, ev);
+	}
+	else if(size == 0)
+	{
+		close(sockfd);
+		printf("[sockfd=%d] pos[%ld], closed\n", sockfd, ev - reactor->events);
+	}
+	else
+	{
+		close(sockfd);
+		printf("recv[sockfd=%d] error[%d]:%s\n", sockfd, errno, strerror(errno));
+	}
+	
+	return size;
 }
 
 int send_cb(int sockfd, int events, void *arg)
 {
+	struct ntyreactor *reactor = (struct ntyreactor *)arg;
+	struct ntyevent *ev = &reactor->events[sockfd];
 	
+	int size = send(sockfd, ev->buffer, ev->size, 0);
+	if(size > 0)
+	{
+		printf("send[sockfd=%d], [%d]%s\n", sockfd, size, ev->buffer);
+
+		ntyreactor_del_event_from_epoll(reactor, ev);
+		ntyevent_set(ev, sockfd, EPOLLIN, recv_cb, (void *)reactor);
+		ntyreactor_add_event_to_epoll(reactor, ev);
+	}
+	else
+	{
+		close(sockfd);
+		ntyreactor_del_event_from_epoll(reactor, ev);
+		printf("send[sockfd=%d] error %s\n", sockfd, strerror(errno));
+	}
+	
+	return size;
 }
 
-
+int main(int argc, char *argv[])
+{
+	int sockfd = init_socket(SERVER_PORT);
+	
+	struct ntyreactor reactor;
+	ntyreactor_init(&reactor);
+	
+	ntyreactor_add_listener(&reactor, sockfd, accept_cb);
+	
+	ntyreactor_run(&reactor);
+	
+	ntyreactor_destory(&reactor);
+	
+	close(sockfd);
+	
+	return 0;
+}
 
 
 
