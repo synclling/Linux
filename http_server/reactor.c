@@ -160,13 +160,13 @@ int ntyreactor_init(struct ntyreactor *reactor, NHTTPHANDLER httphandler)
 	memset(reactor, 0, sizeof(struct ntyreactor));
 	
 	reactor->epfd = epoll_create(1);
-	if(reactor->epfd < 0)
+	if(reactor->epfd == -1)
 	{
 		printf("create epfd in %s error: %s\n", __func__, strerror(errno));
 		return -2;
 	}
 	
-	reactor->events =  (struct ntyevent *)malloc(MAX_EPOLL_EVENTS * sizeof(struct ntyevent));
+	reactor->events = (struct ntyevent *)malloc(MAX_EPOLL_EVENTS * sizeof(struct ntyevent));
 	if(reactor->events == NULL)
 	{
 		printf("malloc in %s error: %s\n", __func__, strerror(errno));
@@ -193,7 +193,7 @@ int ntyreactor_add_event_to_epoll(struct ntyreactor *reactor, struct ntyevent *e
 		epollev.data.ptr = (void *)ev;
 		
 		int res = epoll_ctl(reactor->epfd, EPOLL_CTL_ADD, ev->sockfd, &epollev);
-		if(res < 0)
+		if(res == -1)
 		{
 			return -2;
 		}
@@ -218,7 +218,7 @@ int ntyreactor_del_event_from_epoll(struct ntyreactor *reactor, struct ntyevent 
 		epollev.data.ptr = (void *)ev;
 		
 		int res = epoll_ctl(reactor->epfd, EPOLL_CTL_DEL, ev->sockfd, &epollev);
-		if(res < 0)
+		if(res == -1)
 		{
 			return -2;
 		}
@@ -295,13 +295,15 @@ int ntyreactor_setup(NHTTPHANDLER httphandler)
 	int sockfd = init_socket(SERVER_PORT);
 	
 	struct ntyreactor reactor;
-	ntyreactor_init(&reactor, httphandler);
+	int res = ntyreactor_init(&reactor, httphandler);
+	if(res == 0)
+	{
+		ntyreactor_add_listener(&reactor, sockfd, accept_cb);
 	
-	ntyreactor_add_listener(&reactor, sockfd, accept_cb);
+		ntyreactor_run(&reactor);
 	
-	ntyreactor_run(&reactor);
-	
-	ntyreactor_destory(&reactor);
+		ntyreactor_destory(&reactor);
+	}
 	
 	close(sockfd);
 	
