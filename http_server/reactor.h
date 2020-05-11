@@ -1,15 +1,6 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <time.h>
+#ifndef __REACTOR_H__
+#define __REACTOR_H__
 
-#include <sys/socket.h>
-#include <sys/epoll.h>
-#include <arpa/inet.h>
-
-#include <unistd.h>
-#include <errno.h>
-#include <fcntl.h>
 
 #define BUFFER_SIZE 4096
 #define MAX_EPOLL_EVENTS 1024
@@ -51,7 +42,8 @@ int recv_cb(int sockfd, void *arg);
 int send_cb(int sockfd, void *arg);
 
 
-int ntyreactor_init(struct ntyreactor *reactor);
+
+int ntyreactor_init(struct ntyreactor *reactor, NHTTPHANDLER httphandler);
 
 int ntyreactor_add_event_to_epoll(struct ntyreactor *reactor, struct ntyevent *ev);
 
@@ -63,3 +55,6 @@ int ntyreactor_run(struct ntyreactor *reactor);
 
 int ntyreactor_destory(struct ntyreactor *reactor);
 
+int ntyreactor_setup(NHTTPHANDLER httphandler);
+
+#endif
