@@ -1,0 +1,12 @@
+﻿  main.cpp
+D:\local\boost_1_66_0\boost/compute/buffer.hpp(136): warning C4244: “return”: 从“boost::compute::ulong_”转换到“std::size_t”，可能丢失数据
+  This header is implementation detail and provided for backwards compatibility.
+main.cpp(33): warning C4244: “=”: 从“time_t”转换到“long”，可能丢失数据
+main.cpp(56): warning C4018: “<”: 有符号/无符号不匹配
+  正在生成代码
+  1 of 3032 functions ( 0.0%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    2 functions had inline decision re-evaluated but remain unchanged
+  已完成代码的生成
+  boost_compute.vcxproj -> G:\0voice\vip\OpenCL\01Template\Template\Release\boost_compute.exe
+  boost_compute.vcxproj -> G:\0voice\vip\OpenCL\01Template\Template\Release\boost_compute.pdb (Full PDB)
