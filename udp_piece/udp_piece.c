@@ -2,16 +2,16 @@
 
 udp_piece_t *udp_piece_init(int buf_size)
 {
-	udp_piece_t *udp_piece = (udp_piece_t *)malloc(sizeof(struct udp_piece_t));
+	udp_piece_t *udp_piece = (udp_piece_t *)malloc(sizeof(udp_piece_t));
 	if(udp_piece == NULL)
 	{
 		return NULL;
 	}
 
-	memset(udp_piece_t, 0, sizeof(struct udp_piece_t));
+	memset(udp_piece, 0, sizeof(udp_piece_t));
 
-	udp_piece->circular_buffer = circular_buffer_init(buf_size);
-	if(udp_piece->circular_buffer == NULL)
+	udp_piece->circular_buf = circular_buffer_init(buf_size);
+	if(udp_piece->circular_buf == NULL)
 	{
 		free(udp_piece);
 		return NULL;
@@ -27,36 +27,38 @@ void udp_piece_uninit(udp_piece_t *udp_piece)
 		return;
 	}
 
+	udp_piece->piece_size = 0;
 	udp_piece->total_size = 0;
 	udp_piece->total_pieces = 0;
-	udp_piece->piece_size = 0;
-	udp_piece->left = 0;
-	udp_piece->recv_pieces = 0;
-	udp_piece->recv_size = 0;
+	udp_piece->last_piece = 0;
 
-	if(udp_piece->recv_buf != NULL)
-	{
-		free(udp_piece->recv_buf);
-		udp_piece->recv_buf = NULL;
-	}
-	
+	udp_piece->recv_pieces = 0;
+
+	udp_piece->recv_len = 0;
+	udp_piece->recv_buf = NULL;
 	udp_piece->send_ptr = NULL;
 
-	circular_buffer_uninit(udp_piece->circular_buffer);
-	udp_piece->circular_buffer = NULL;
+	circular_buffer_uninit(udp_piece->circular_buf);
+	udp_piece->circular_buf = NULL;
+
 }
 
-int udp_piece_cut(udp_piece_t *udp_piece, void *buf, int size)
+int udp_piece_cut(udp_piece_t *udp_piece, void *data_buf, int data_size)
 {
-	if(udp_piece == NULL || size < 0)
+	if(udp_piece == NULL || data_buf == NULL || data_size < 0)
 	{
 		return 0;
 	}
 
-	udp_piece->send_ptr = buf;
-	udp_piece->total_size = size;
-	udp_piece->left = size % PIECE_SIZE;
-	udp_piece->total_pieces = udp_piece->left > 0? (size / PIECE_SIZE + 1) : (size / PIECE_SIZE);
+	udp_piece->total_size = data_size;
+	udp_piece->last_piece = data_size % PIECE_DATA_SIZE;
+	udp_piece->total_pieces = data_size / PIECE_DATA_SIZE;
+	if(udp_piece->last_piece > 0)
+	{
+		++udp_piece->total_pieces;
+	}
+
+	udp_piece->send_ptr = data_buf;
 
 	return udp_piece->total_pieces;
 }
@@ -67,21 +69,15 @@ uint8_t *udp_piece_get(udp_piece_t *udp_piece, int index, int *got_piece_size)
 	{
 		return NULL;
 	}
-	
-	//#define HEAD_POS_SYNC_WORD 		0 // 同步字
-	//#define HEAD_POS_TOTAL_SIZE		2 // 所有分片的数据大小(不包括HEADA)
-	//#define HEAD_POS_TOTAL_PIECES	4 // 分片的总数量
-	//#define HEAD_POS_PIECE_INDEX	6 // 分片序号，从0开始
-	//#define HEAD_POS_PIECE_SIZE		8 // 当前分片的数据大小
 
-	int piece_size = 0;
-	if(index == udp_piece->total_pieces - 1 && udp_piece->left > 0)
+	int piece_data_size = 0;
+	if(index == (udp_piece->total_pieces - 1) && udp_piece->last_piece > 0)
 	{
-		piece_size = udp_piece->left;
+		piece_data_size = udp_piece->last_piece;
 	}
 	else
 	{
-		piece_size = PIECE_SIZE;
+		piece_data_size = PIECE_DATA_SIZE;
 	}
 
 	memset(udp_piece->piece_buf, 0, sizeof(udp_piece->piece_buf));
@@ -98,19 +94,41 @@ uint8_t *udp_piece_get(udp_piece_t *udp_piece, int index, int *got_piece_size)
 	udp_piece->piece_buf[HEAD_POS_PIECE_INDEX] = (index >> 8);
 	udp_piece->piece_buf[HEAD_POS_PIECE_INDEX + 1] = (index & 0xff);
 
-	udp_piece->piece_buf[HEAD_POS_PIECE_SIZE] = (piece_size >> 8);
-	udp_piece->piece_buf[HEAD_POS_PIECE_SIZE + 1] = (piece_size & 0xff);
+	udp_piece->piece_buf[HEAD_POS_PIECE_DATA_SIZE] = (piece_data_size >> 8);
+	udp_piece->piece_buf[HEAD_POS_PIECE_DATA_SIZE + 1] = (piece_data_size & 0xff);
 
-	// 拷贝用户数据到分片数据区
-	memcpy(&udp_piece->piece_buf[HEAD_SIZE], &udp_piece->send_ptr[PIECE_SIZE * index], piece_size);
-	*got_piece_size = piece_size + HEAD_SIZE;
+	memcpy(&udp_piece->piece_buf[PIECE_HEAD_SIZE], &udp_piece->send_ptr[index * PIECE_DATA_SIZE], piece_data_size);
 
-	return udp_piece->piece_buf;
-	
+	*got_piece_size = piece_data_size + PIECE_HEAD_SIZE;
+
+	return udp_piece;
 }
 
-int udp_piece_merge(udp_piece_t *udp_piece, void *buf, int size)
+int udp_piece_merge(udp_piece_t *udp_piece, void *data_buf, int data_size)
 {
-	uint8_t *piece_buf = NULL;
+	int get_all_pieces = 0;
+	
+	int index = 0;
+	int temp_total_size = 0;
+	int temp_total_pieces = 0;
+
+	int temp_data_size = data_size;
+	uint8_t *temp_data_buf = data_buf;
+	for(int i = 0; i < data_size; ++i)
+	{
+		if(temp_data_buf[0] == 0xAF && temp_data_buf[1] == 0xAE)
+		{
+			break;
+		}
+		++temp_data_buf;
+		--temp_data_size;
+	}
+
+	while(temp_data_size > PIECE_HEAD_SIZE)
+	{
+		int data_len = (temp_data_buf[HEAD_POS_PIECE_DATA_SIZE] << 8) + temp_data_buf[HEAD_POS_PIECE_DATA_SIZE + 1];
+		
+	}
 	
 }
+
