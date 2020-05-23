@@ -104,31 +104,115 @@ uint8_t *udp_piece_get(udp_piece_t *udp_piece, int index, int *got_piece_size)
 	return udp_piece;
 }
 
-int udp_piece_merge(udp_piece_t *udp_piece, void *data_buf, int data_size)
+int udp_piece_merge(udp_piece_t *udp_piece, void *recv_buf, int recv_size)
 {
 	int get_all_pieces = 0;
-	
+
 	int index = 0;
 	int temp_total_size = 0;
 	int temp_total_pieces = 0;
 
-	int temp_data_size = data_size;
-	uint8_t *temp_data_buf = data_buf;
-	for(int i = 0; i < data_size; ++i)
+	int temp_size = recv_size;
+	uint8_t *temp_buf = (uint8_t *)recv_buf;
+
+	for(int i = 0; i < recv_size; ++i)
 	{
-		if(temp_data_buf[0] == 0xAF && temp_data_buf[1] == 0xAE)
+		if(temp_buf[0] == 0xAF && temp_buf[1] == 0xAE)
 		{
 			break;
 		}
-		++temp_data_buf;
-		--temp_data_size;
+
+		++temp_buf;
+		--temp_size;
 	}
 
-	while(temp_data_size > PIECE_HEAD_SIZE)
+	while(temp_size > PIECE_HEAD_SIZE)
 	{
-		int data_len = (temp_data_buf[HEAD_POS_PIECE_DATA_SIZE] << 8) + temp_data_buf[HEAD_POS_PIECE_DATA_SIZE + 1];
-		
+		int data_size = (temp_buf[HEAD_POS_PIECE_DATA_SIZE] << 8) + temp_buf[HEAD_POS_PIECE_DATA_SIZE + 1];
+		if(temp_size >= (PIECE_HEAD_SIZE + data_size))
+		{
+			index = (temp_buf[HEAD_POS_PIECE_INDEX] << 8) + temp_buf[HEAD_POS_PIECE_INDEX + 1];
+			if(udp_piece->total_size == 0) // 第一个分片
+			{
+				udp_piece->total_size = (temp_buf[HEAD_POS_TOTAL_SIZE] << 8) + temp_buf[HEAD_POS_TOTAL_SIZE + 1];
+				udp_piece->total_pieces = (temp_buf[HEAD_POS_TOTAL_PIECES] << 8) + temp_buf[HEAD_POS_TOTAL_PIECES + 1];
+
+				udp_piece->recv_len = 0;
+				udp_piece->recv_pieces = 0;
+
+				if(udp_piece->recv_buf != NULL)
+				{
+					free(udp_piece->recv_buf);
+					udp_piece->recv_buf = NULL;
+				}
+
+				udp_piece->recv_buf = (uint8_t *)malloc(udp_piece->total_size + 1);
+				if(udp_piece->recv_buf == NULL)
+				{
+					printf("malloc recv_buf failed.\n");
+					return -1;
+				}
+			}
+
+			printf("recv_size: %d, piece_data_size: %d, index: %d, recv_pieces: %d, total_size: %d, total_pieces: %d\n",
+				temp_size, data_size, index, udp_piece->recv_pieces, udp_piece->total_size, udp_piece->total_pieces);
+
+			temp_total_size = (temp_buf[HEAD_POS_TOTAL_SIZE] << 8) + temp_buf[HEAD_POS_TOTAL_SIZE + 1];
+			temp_total_pieces = (temp_buf[HEAD_POS_TOTAL_PIECES] << 8) + temp_buf[HEAD_POS_TOTAL_PIECES + 1];
+
+			if(temp_total_size != udp_piece->total_size || temp_total_pieces != udp_piece->total_pieces)
+			{
+				udp_piece->total_size = temp_total_size;
+				udp_piece->total_pieces = temp_total_pieces;
+
+				udp_piece->recv_pieces = 1;
+				udp_piece->recv_len = 0;
+				if(udp_piece->recv_buf != NULL)
+				{
+					free(udp_piece->recv_buf);
+					udp_piece->recv_buf = NULL;
+				}
+				udp_piece->recv_buf = (uint8_t *)malloc(udp_piece->total_size + 1);
+				if(udp_piece->recv_buf != NULL)
+				{
+					printf("malloc recv_buf failed.\n");
+					return -1;
+				}
+			}
+
+			temp_buf += PIECE_HEAD_SIZE;
+			temp_size -= PIECE_HEAD_SIZE;
+
+			memcpy(&udp_piece->recv_buf[index * PIECE_DATA_SIZE], temp_buf, data_size);
+
+			temp_buf += data_size;
+			temp_size -= data_size;
+
+			udp_piece->recv_len += data_size;
+			++udp_piece->recv_pieces;
+			if(udp_piece->recv_pieces == udp_piece->total_pieces)
+			{
+				udp_piece->total_pieces = 0;
+				udp_piece->recv_pieces = 0;
+
+				if(udp_piece->recv_len == udp_piece->total_size)
+				{
+					get_all_pieces = 1;
+				}
+				else
+				{
+					printf("recv_len != total_size! recv_len: %d, total_size: %d\n",
+						udp_piece->recv_len, udp_piece->total_size);
+					get_all_pieces = -1;
+				}
+			}
+		}
+		else
+		{
+			temp_size = 0;
+		}
 	}
-	
+
+	return get_all_pieces;
 }
 

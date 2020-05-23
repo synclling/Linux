@@ -73,6 +73,6 @@ uint8_t *udp_piece_get(udp_piece_t *udp_piece, int index, int *got_piece_size);
  * @param size  分片数据的长度
  * @return  返回-1则重组失败，返回0则正在重组中，返回1则重组成功
  */
-int udp_piece_merge(udp_piece_t *udp_piece, void *data_buf, int data_size);
+int udp_piece_merge(udp_piece_t *udp_piece, void *recv_buf, int recv_size);
 
 #endif
