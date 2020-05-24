@@ -175,3 +175,13 @@ void circular_buffer_pop(circular_buffer_t *circular_buf, const int n)
 
 	circular_buf->size -= pop_size;
 }
+
+
+
+
+
+
+
+
+
+
