@@ -132,4 +132,3 @@ BOOL async_cond_queue_empty(async_queue_t* q)
 {
     return queue_is_empty(q->queue);
 }
-

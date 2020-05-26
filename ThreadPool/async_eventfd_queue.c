@@ -144,4 +144,3 @@ BOOL async_eventfd_queue_destory(async_queue_t* q)
 {
     return TRUE;
 }
-
