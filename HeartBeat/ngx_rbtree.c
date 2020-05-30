@@ -62,9 +62,30 @@ void ngx_rbtree_insert(ngx_rbtree_t *tree, ngx_rbtree_node_t *node)
 		}
 		else // 当前结点的父节点为祖父结点的右孩子
 		{
+			temp = node->parent->parent->left;
+			if(ngx_rbt_is_red(temp))
+			{
+				ngx_rbt_black(node->parent);
+				ngx_rbt_black(temp);
+				ngx_rbt_red(node->parent->parent);
+				node = node->parent->parent;
+			}
+			else
+			{
+				if(node == node->parent->left)
+				{
+					node = node->parent;
+					ngx_rbtree_right_rotate(root, sentinel, node);
+				}
+
+				ngx_rbt_black(node->parent);
+				ngx_rbt_red(node->parent->parent);
+				ngx_rbtree_left_rotate(root, sentinel, node->parent->parent);
+			}
 		}
 	}
-	
+
+	ngx_rbt_black(*root);
 }
 
 
