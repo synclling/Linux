@@ -50,7 +50,8 @@ ngx_event_add_timer(ngx_event_t *ev, ngx_msec_t timer)
 
     key = ngx_current_msec + timer;
 
-    if (ev->timer_set) {
+    if (ev->timer_set)
+	{
 
         /*
          * Use a previous timer value if difference between it and a new
@@ -60,7 +61,8 @@ ngx_event_add_timer(ngx_event_t *ev, ngx_msec_t timer)
 
         diff = (ngx_msec_int_t) (key - ev->timer.key);
 
-        if (ngx_abs(diff) < NGX_TIMER_LAZY_DELAY) {
+        if (ngx_abs(diff) < NGX_TIMER_LAZY_DELAY)
+		{
             printf( "event timer: %d, old: %ld, new: %ld\n",
                     ev->fd, ev->timer.key, key);
             return;

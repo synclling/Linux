@@ -33,7 +33,8 @@ ngx_event_find_timer(void)
     ngx_msec_int_t      timer;
     ngx_rbtree_node_t  *node, *root, *sentinel;
 
-    if (ngx_event_timer_rbtree.root == &ngx_event_timer_sentinel) {
+    if (ngx_event_timer_rbtree.root == &ngx_event_timer_sentinel)
+	{
         return NGX_TIMER_INFINITE;
     }
 
@@ -57,10 +58,12 @@ ngx_event_expire_timers(void)
 
     sentinel = ngx_event_timer_rbtree.sentinel;
 
-    for ( ;; ) {
+    for ( ;; )
+	{
         root = ngx_event_timer_rbtree.root;
 
-        if (root == sentinel) {
+        if (root == sentinel)
+		{
             return;
         }
 
@@ -68,7 +71,8 @@ ngx_event_expire_timers(void)
 
         /* node->key > ngx_current_msec */
 
-        if ((ngx_msec_int_t) (node->key - ngx_current_msec) > 0) {
+        if ((ngx_msec_int_t) (node->key - ngx_current_msec) > 0)
+		{
             return;
         }
 
@@ -100,7 +104,8 @@ ngx_event_no_timers_left(void)
     sentinel = ngx_event_timer_rbtree.sentinel;
     root = ngx_event_timer_rbtree.root;
 
-    if (root == sentinel) {
+    if (root == sentinel)
+	{
         return NGX_OK;
     }
 
@@ -111,7 +116,8 @@ ngx_event_no_timers_left(void)
         ev = (ngx_event_t *) ((char *) node - offsetof(ngx_event_t, timer));
 
 #if 0
-        if (!ev->cancelable) {
+        if (!ev->cancelable)
+		{
             return NGX_AGAIN;
         }
 #endif
