@@ -253,7 +253,59 @@ void ngx_rbtree_delete(ngx_rbtree_t *tree, ngx_rbtree_node_t *node)
     ngx_rbt_black(temp);
 }
 
+void ngx_rbtree_insert_value(ngx_rbtree_node_t *temp, ngx_rbtree_node_t *node, ngx_rbtree_node_t *sentinel)
+{
+	ngx_rbtree_node_t **p = NULL;
+	
+	while(1)
+	{
+		p = (node->key < temp->key)? &(temp->left) : &(temp->right);
+		if(*p == sentinel)
+		{
+			break;
+		}
+		
+		temp = *p;
+	}
+	
+	*p = node;
+	node->parent = temp;
+	node->left = sentinel;
+	node->right = sentinel;
+	ngx_rbt_red(node);
+}
 
+void ngx_rbtree_insert_timer_value(ngx_rbtree_node_t *temp, ngx_rbtree_node_t *node, ngx_rbtree_node_t *sentinel)
+{
+	ngx_rbtree_node_t **p = NULL;
+	
+	while(1)
+	{
+		/*
+         * Timer values
+         * 1) are spread in small range, usually several minutes,
+         * 2) and overflow each 49 days, if milliseconds are stored in 32 bits.
+         * The comparison takes into account that overflow.
+         */
+
+        /*  node->key < temp->key */
+		
+		p = ((ngx_rbtree_key_int_t)(node->key - temp->key) < 0)? &(temp->left) : &(temp->right);
+
+        if (*p == sentinel)
+		{
+            break;
+        }
+
+        temp = *p;
+	}
+	
+	*p = node;
+	node->parent = temp;
+	node->left = sentinel;
+	node-right = sentinel;
+	ngx_rbt_red(node);
+}
 
 static inline void ngx_rbtree_left_rotate(ngx_rbtree_node_t **root, ngx_rbtree_node_t *sentinel, ngx_rbtree_node_t *node)
 {
