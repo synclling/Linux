@@ -1,96 +1,162 @@
-#include "ngx_rbtree.h"
+
+/*
+ * Copyright (C) Igor Sysoev
+ * Copyright (C) Nginx, Inc.
+ */
 
 
-static inline void ngx_rbtree_left_rotate(ngx_rbtree_node_t **root, ngx_rbtree_node_t *sentinel, ngx_rbtree_node_t *node);
-static inline void ngx_rbtree_right_rotate(ngx_rbtree_node_t **root, ngx_rbtree_node_t *sentinel, ngx_rbtree_node_t *node);
+
+/*
+ * The red-black tree code is based on the algorithm described in
+ * the "Introduction to Algorithms" by Cormen, Leiserson and Rivest.
+ */
+
+#include "ngx_config.h"
+#include "ngx_core.h"
 
 
+static ngx_inline void ngx_rbtree_left_rotate(ngx_rbtree_node_t **root,
+    ngx_rbtree_node_t *sentinel, ngx_rbtree_node_t *node);
+static ngx_inline void ngx_rbtree_right_rotate(ngx_rbtree_node_t **root,
+    ngx_rbtree_node_t *sentinel, ngx_rbtree_node_t *node);
 
-void ngx_rbtree_init(ngx_rbtree *tree, ngx_rbtree_node_t *sentinel, ngx_rbtree_insert insert)
+
+void
+ngx_rbtree_insert(ngx_rbtree_t *tree, ngx_rbtree_node_t *node)
 {
-	ngx_rbtree_sentinel_init(sentinel);
-	tree->root = sentinel;
-	tree->sentinel = sentinel;
-	tree->insert = insert;
+    ngx_rbtree_node_t  **root, *temp, *sentinel;
+
+    /* a binary tree insert */
+
+    root = &tree->root;
+    sentinel = tree->sentinel;
+
+    if (*root == sentinel) {
+        node->parent = NULL;
+        node->left = sentinel;
+        node->right = sentinel;
+        ngx_rbt_black(node);
+        *root = node;
+
+        return;
+    }
+
+    tree->insert(*root, node, sentinel);
+
+    /* re-balance tree */
+
+    while (node != *root && ngx_rbt_is_red(node->parent)) {
+
+        if (node->parent == node->parent->parent->left) {
+            temp = node->parent->parent->right;
+
+            if (ngx_rbt_is_red(temp)) {
+                ngx_rbt_black(node->parent);
+                ngx_rbt_black(temp);
+                ngx_rbt_red(node->parent->parent);
+                node = node->parent->parent;
+
+            } else {
+                if (node == node->parent->right) {
+                    node = node->parent;
+                    ngx_rbtree_left_rotate(root, sentinel, node);
+                }
+
+                ngx_rbt_black(node->parent);
+                ngx_rbt_red(node->parent->parent);
+                ngx_rbtree_right_rotate(root, sentinel, node->parent->parent);
+            }
+
+        } else {
+            temp = node->parent->parent->left;
+
+            if (ngx_rbt_is_red(temp)) {
+                ngx_rbt_black(node->parent);
+                ngx_rbt_black(temp);
+                ngx_rbt_red(node->parent->parent);
+                node = node->parent->parent;
+
+            } else {
+                if (node == node->parent->left) {
+                    node = node->parent;
+                    ngx_rbtree_right_rotate(root, sentinel, node);
+                }
+
+                ngx_rbt_black(node->parent);
+                ngx_rbt_red(node->parent->parent);
+                ngx_rbtree_left_rotate(root, sentinel, node->parent->parent);
+            }
+        }
+    }
+
+    ngx_rbt_black(*root);
 }
 
-void ngx_rbtree_insert(ngx_rbtree_t *tree, ngx_rbtree_node_t *node)
+
+void
+ngx_rbtree_insert_value(ngx_rbtree_node_t *temp, ngx_rbtree_node_t *node,
+    ngx_rbtree_node_t *sentinel)
 {
-	ngx_rbtree_node_t *temp = NULL;
+    ngx_rbtree_node_t  **p;
 
-	ngx_rbtree_node_t **root = &(tree->root);
-	ngx_rbtree_node_t *sentinel = tree->sentinel;
+    for ( ;; ) {
 
-	if(*root == sentinel) // 根节点为空
-	{
-		node->parent = NULL;
-		node->left = sentinel;
-		node->right = sentinel;
-		ngx_rbt_black(node); // 设置根结点为黑色
-		*root = node;
+        p = (node->key < temp->key) ? &temp->left : &temp->right;
 
-		return;
-	}
+        if (*p == sentinel) {
+            break;
+        }
 
-	tree->insert(*root, node, sentinel); // 插入结点
+        temp = *p;
+    }
 
-	// re-balance tree
-	while(node != *root && ngx_rbt_is_red(node->parent))
-	{
-		if(node->parent == node->parent->parent->left) // 当前结点的父结点为祖父结点的左孩子
-		{
-			temp = node->parent->parent->right; // 叔叔结点
-			if(ngx_rbt_is_red(temp)) // 叔叔结点为红色
-			{
-				ngx_rbt_black(node->parent);
-				ngx_rbt_black(temp);
-				ngx_rbt_red(node->parent->parent);
-				node = node->parent->parent;
-			}
-			else // 叔叔结点为黑色
-			{
-				if(node == node->parent->right)
-				{
-					node = node->parent;
-					ngx_rbtree_left_rotate(root, sentinel, node);
-				}
-
-				ngx_rbt_black(node->parent);
-				ngx_rbt_red(node->parent->parent);
-				ngx_rbtree_right_rotate(root, sentinel, node->parent->parent);
-			}
-		}
-		else // 当前结点的父节点为祖父结点的右孩子
-		{
-			temp = node->parent->parent->left;
-			if(ngx_rbt_is_red(temp))
-			{
-				ngx_rbt_black(node->parent);
-				ngx_rbt_black(temp);
-				ngx_rbt_red(node->parent->parent);
-				node = node->parent->parent;
-			}
-			else
-			{
-				if(node == node->parent->left)
-				{
-					node = node->parent;
-					ngx_rbtree_right_rotate(root, sentinel, node);
-				}
-
-				ngx_rbt_black(node->parent);
-				ngx_rbt_red(node->parent->parent);
-				ngx_rbtree_left_rotate(root, sentinel, node->parent->parent);
-			}
-		}
-	}
-
-	ngx_rbt_black(*root);
+    *p = node;
+    node->parent = temp;
+    node->left = sentinel;
+    node->right = sentinel;
+    ngx_rbt_red(node);
 }
 
-void ngx_rbtree_delete(ngx_rbtree_t *tree, ngx_rbtree_node_t *node)
+
+void
+ngx_rbtree_insert_timer_value(ngx_rbtree_node_t *temp, ngx_rbtree_node_t *node,
+    ngx_rbtree_node_t *sentinel)
 {
-	ngx_uint_t           red;
+    ngx_rbtree_node_t  **p;
+
+    for ( ;; ) {
+
+        /*
+         * Timer values
+         * 1) are spread in small range, usually several minutes,
+         * 2) and overflow each 49 days, if milliseconds are stored in 32 bits.
+         * The comparison takes into account that overflow.
+         */
+
+        /*  node->key < temp->key */
+
+        p = ((ngx_rbtree_key_int_t) (node->key - temp->key) < 0)
+            ? &temp->left : &temp->right;
+
+        if (*p == sentinel) {
+            break;
+        }
+
+        temp = *p;
+    }
+
+    *p = node;
+    node->parent = temp;
+    node->left = sentinel;
+    node->right = sentinel;
+    ngx_rbt_red(node);
+}
+
+
+void
+ngx_rbtree_delete(ngx_rbtree_t *tree, ngx_rbtree_node_t *node)
+{
+    ngx_uint_t           red;
     ngx_rbtree_node_t  **root, *sentinel, *subst, *temp, *w;
 
     /* a binary tree delete */
@@ -253,114 +319,91 @@ void ngx_rbtree_delete(ngx_rbtree_t *tree, ngx_rbtree_node_t *node)
     ngx_rbt_black(temp);
 }
 
-void ngx_rbtree_insert_value(ngx_rbtree_node_t *temp, ngx_rbtree_node_t *node, ngx_rbtree_node_t *sentinel)
+
+static ngx_inline void
+ngx_rbtree_left_rotate(ngx_rbtree_node_t **root, ngx_rbtree_node_t *sentinel,
+    ngx_rbtree_node_t *node)
 {
-	ngx_rbtree_node_t **p = NULL;
-	
-	while(1)
-	{
-		p = (node->key < temp->key)? &(temp->left) : &(temp->right);
-		if(*p == sentinel)
-		{
-			break;
-		}
-		
-		temp = *p;
-	}
-	
-	*p = node;
-	node->parent = temp;
-	node->left = sentinel;
-	node->right = sentinel;
-	ngx_rbt_red(node);
+    ngx_rbtree_node_t  *temp;
+
+    temp = node->right;
+    node->right = temp->left;
+
+    if (temp->left != sentinel) {
+        temp->left->parent = node;
+    }
+
+    temp->parent = node->parent;
+
+    if (node == *root) {
+        *root = temp;
+
+    } else if (node == node->parent->left) {
+        node->parent->left = temp;
+
+    } else {
+        node->parent->right = temp;
+    }
+
+    temp->left = node;
+    node->parent = temp;
 }
 
-void ngx_rbtree_insert_timer_value(ngx_rbtree_node_t *temp, ngx_rbtree_node_t *node, ngx_rbtree_node_t *sentinel)
+
+static ngx_inline void
+ngx_rbtree_right_rotate(ngx_rbtree_node_t **root, ngx_rbtree_node_t *sentinel,
+    ngx_rbtree_node_t *node)
 {
-	ngx_rbtree_node_t **p = NULL;
-	
-	while(1)
-	{
-		/*
-         * Timer values
-         * 1) are spread in small range, usually several minutes,
-         * 2) and overflow each 49 days, if milliseconds are stored in 32 bits.
-         * The comparison takes into account that overflow.
-         */
+    ngx_rbtree_node_t  *temp;
 
-        /*  node->key < temp->key */
-		
-		p = ((ngx_rbtree_key_int_t)(node->key - temp->key) < 0)? &(temp->left) : &(temp->right);
+    temp = node->left;
+    node->left = temp->right;
 
-        if (*p == sentinel)
-		{
-            break;
+    if (temp->right != sentinel) {
+        temp->right->parent = node;
+    }
+
+    temp->parent = node->parent;
+
+    if (node == *root) {
+        *root = temp;
+
+    } else if (node == node->parent->right) {
+        node->parent->right = temp;
+
+    } else {
+        node->parent->left = temp;
+    }
+
+    temp->right = node;
+    node->parent = temp;
+}
+
+
+ngx_rbtree_node_t *
+ngx_rbtree_next(ngx_rbtree_t *tree, ngx_rbtree_node_t *node)
+{
+    ngx_rbtree_node_t  *root, *sentinel, *parent;
+
+    sentinel = tree->sentinel;
+
+    if (node->right != sentinel) {
+        return ngx_rbtree_min(node->right, sentinel);
+    }
+
+    root = tree->root;
+
+    for ( ;; ) {
+        parent = node->parent;
+
+        if (node == root) {
+            return NULL;
         }
 
-        temp = *p;
-	}
-	
-	*p = node;
-	node->parent = temp;
-	node->left = sentinel;
-	node-right = sentinel;
-	ngx_rbt_red(node);
-}
+        if (node == parent->left) {
+            return parent;
+        }
 
-static inline void ngx_rbtree_left_rotate(ngx_rbtree_node_t **root, ngx_rbtree_node_t *sentinel, ngx_rbtree_node_t *node)
-{
-	ngx_rbtree_node_t *temp = node->right;
-
-	node->right = temp->left;
-	if(temp->left != sentinel)
-	{
-		temp->left->parent = node;
-	}
-
-	temp->parent = node->parent;
-	
-	if(node == *root)
-	{
-		*root = temp;
-	}
-	else if(node == node->parent->left)
-	{
-		node->parent->left = temp;
-	}
-	else
-	{
-		node->parent->right = temp;
-	}
-
-	temp->left = node;
-	node->parent = temp;
-}
-
-static inline void ngx_rbtree_right_rotate(ngx_rbtree_node_t **root, ngx_rbtree_node_t *sentinel, ngx_rbtree_node_t *node)
-{
-	ngx_rbtree_node_t *temp = node->left;
-
-	node->left = temp->right;
-	if(temp->right != sentinel)
-	{
-		temp->right->parent = node;
-	}
-
-	temp->parent = node->parent;
-
-	if(node == *root)
-	{
-		*root = temp;
-	}
-	else if(node == node->parent->left)
-	{
-		node->parent->left = temp;
-	}
-	else
-	{
-		node->parent->right = temp;
-	}
-
-	temp->right = node;
-	node->parent = temp;
+        node = parent;
+    }
 }
