@@ -13,27 +13,39 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <netinet/ip.h>
-#include <netinet/icmp.h>
+#include <netinet/ip_icmp.h>
 
 
 #define SEND_BUFFER_SIZE 	72		// 发送缓冲区的大小
 #define RECV_BUFFER_SIZE 	2048	// 接收缓冲区的大小
 
-
 /* 保存已发送包的状态 */
 typedef struct ping_packet {
-	short 	seq;				// 序列号
-	int 	flag;				// 1表示已发送但没有收到响应包，0表示收到响应包
-	struct timeval tv_begin;	// 发送的时间
-	struct timeval tv_end;		// 接收的时间
+	short 	seq;					// 该包的序列号
+	int 	flag;					// 1表示已发送但没有收到响应包，0表示收到响应包
+	struct timeval tv_send;			// 发送该包的时间
 } ping_packet;
 
+static int rawsock = 0;					// 套接字
+static char dest_str[128];				// 目的主机字符串
+static struct sockaddr_in dest;			// 目的地址
+static char send_buf[SEND_BUFFER_SIZE];	// 发送缓冲区
+static char recv_buf[RECV_BUFFER_SIZE];	// 接收缓冲区
+static short packet_send = 0;			// 已经发送的ICMP包数量
+static short packet_recv = 0;			// 已经接收的ICMP包数量
+static struct timeval tv_begin;			// 本程序开始发送的时间
+static struct timeval tv_end;			// 本程序结束发送的时间
+static struct timeval tv_internal;		// 本程序开始到结束的时间间隔
+
+static pid_t pid;						// 进程ID
+static int alive = 0;					// 是否接收到退出信号
+static ping_packet packets[128];		// ICMP包数组，保存已经发送的ICMP包
 
 /*
- *	@brief	CRC16校验和计算
- *	@param	[in]data		数据
- *	@param	[in]len			数据长度
- *	@return 返回计算结果
+ *	@brief	CRC16校验和计算，校验包括ICMP报文的首部和数据部分
+ *	@param	[in]data		ICMP报文
+ *	@param	[in]len			ICMP报文总长度
+ *	@return 返回校验和
  */
 static unsigned short icmp_cksum(unsigned char *data, int len);
 
@@ -81,3 +93,10 @@ static struct timeval icmp_tvsub(struct timeval begin, struct timeval end);
  *	@return 
  */
 static void icmp_statistics();
+
+/*
+ *	@brief	在ICMP包数组中查找指定的ICMP包
+ *	@param	[in]seq			包的序列号
+ *	@return 
+ */
+static ping_packet *icmp_findpacket(int seq);
