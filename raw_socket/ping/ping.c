@@ -205,7 +205,7 @@ static struct timeval icmp_tvsub(struct timeval begin, struct timeval end)
 static void icmp_statistics()
 {
 	long time = tv_internal.tv_sec * 1000 + tv_internal.tv_usec / 1000;
-	printf("--- %s ping statistics ---\n", dest_str);
+	printf("\n--- %s ping statistics ---\n", dest_str);
 	printf("%d packets transmitted, %d received, %d%% packet loss, time %ldms\n", 
 		packet_send, packet_recv, (packet_send - packet_recv) * 100 / packet_send, time);
 }
@@ -243,28 +243,29 @@ static ping_packet *icmp_findpacket(int seq)
 
 int main(int argc, char *argv[])
 {
-	struct hostent *host = NULL;
-	struct protoent *protocol = NULL;
-
-	char protoname[] = "icmp";
-	unsigned long inaddr = 1;
-	int size = 128 * 1024;
-
 	if(argc < 2)
 	{
 		printf("ping aaa.bbb.ccc.ddd\n");
 		return -1;
 	}
-
-	protocol = getprotobyname(protoname);
-	if(protocol == NULL)
-	{
-		perror("getprotobyname()");
-		return -1;
-	}
-
+	
+	// 初始化全局数据
+	alive = 1;
+	pid = getuid();
+	bzero(&dest, sizeof(dest));
 	memcpy(dest_str, argv[1], strlen(argv[1]) + 1);
 	memset(packets, 0, sizeof(struct ping_packet) * 128);
+	
+	
+	struct hostent *host = NULL;
+	struct protoent *protocol = NULL;
+	
+	protocol = getprotobyname("icmp");
+	if(protocol == NULL)
+	{
+		perror("getprotobyname");
+		return -1;
+	}
 
 	rawsock = socket(AF_INET, SOCK_RAW, protocol->p_proto);
 	if(rawsock < 0)
@@ -273,18 +274,17 @@ int main(int argc, char *argv[])
 		return -1;
 	}
 
-	pid = getuid();
-
 	// 增大接收缓冲区，防止接收的包被覆盖
+	int size = 128 * 1024;
 	setsockopt(rawsock, SOL_SOCKET, SO_RCVBUF, &size, sizeof(size));
 
-	bzero(&dest, sizeof(dest));
+	
 	dest.sin_family = AF_INET;
 
-	inaddr = inet_addr(argv[1]);
+	unsigned long inaddr = inet_addr(dest_str);
 	if(inaddr == INADDR_NONE)
 	{
-		host = gethostbyname(argv[1]);
+		host = gethostbyname(dest_str);
 		if(host == NULL)
 		{
 			perror("gethostbyname");
@@ -292,13 +292,13 @@ int main(int argc, char *argv[])
 		}
 
 		memcpy((char *)&dest.sin_addr, host->h_addr, host->h_length);
+		
+		inaddr = dest.sin_addr.s_addr;
 	}
 	else
 	{
 		memcpy((char *)&dest.sin_addr, &inaddr, sizeof(inaddr));
 	}
-
-	inaddr = dest.sin_addr.s_addr;
 
 	printf("PING %s (%ld.%ld.%ld.%ld) 56(84) bytes of data.\n", dest_str, 
 		(inaddr & 0x000000ff) >> 0, 
@@ -306,14 +306,14 @@ int main(int argc, char *argv[])
 		(inaddr & 0x00ff0000) >> 16, 
 		(inaddr & 0xff000000) >> 24);
 
+
 	signal(SIGINT, icmp_sigint);
 
-	alive = 1;
 
-	pthread_t send_id, recv_id;
-
-	int err = 0;
-	err = pthread_create(&send_id, NULL, icmp_send, NULL);
+	pthread_t send_id;
+	pthread_t recv_id;
+	
+	int err = pthread_create(&send_id, NULL, icmp_send, NULL);
 	if(err < 0)
 	{
 		return -1;
@@ -327,9 +327,9 @@ int main(int argc, char *argv[])
 	pthread_join(send_id, NULL);
 	pthread_join(recv_id, NULL);
 
-	close(rawsock);
-
 	icmp_statistics();
+	
+	close(rawsock);
 
 	return 0;
 	
