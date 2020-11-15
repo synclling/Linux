@@ -252,22 +252,12 @@ int main(int argc, char *argv[])
 	// 初始化全局数据
 	alive = 1;
 	pid = getuid();
-	bzero(&dest, sizeof(dest));
+	
 	memcpy(dest_str, argv[1], strlen(argv[1]) + 1);
 	memset(packets, 0, sizeof(struct ping_packet) * 128);
 	
-	
-	struct hostent *host = NULL;
-	struct protoent *protocol = NULL;
-	
-	protocol = getprotobyname("icmp");
-	if(protocol == NULL)
-	{
-		perror("getprotobyname");
-		return -1;
-	}
-
-	rawsock = socket(AF_INET, SOCK_RAW, protocol->p_proto);
+	// 原始套接字
+	rawsock = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
 	if(rawsock < 0)
 	{
 		perror("socket");
@@ -278,13 +268,13 @@ int main(int argc, char *argv[])
 	int size = 128 * 1024;
 	setsockopt(rawsock, SOL_SOCKET, SO_RCVBUF, &size, sizeof(size));
 
-	
+	bzero(&dest, sizeof(dest));
 	dest.sin_family = AF_INET;
 
 	unsigned long inaddr = inet_addr(dest_str);
 	if(inaddr == INADDR_NONE)
 	{
-		host = gethostbyname(dest_str);
+		struct hostent *host = gethostbyname(dest_str);
 		if(host == NULL)
 		{
 			perror("gethostbyname");
