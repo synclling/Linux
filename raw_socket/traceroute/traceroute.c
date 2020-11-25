@@ -82,6 +82,7 @@ int main(int argc, char *argv[])
 
 	int seq = 1;
 	int recvcnt = 0;
+	double totaltime = 0.0;
 	
 	struct timeval begin, current;
 	struct timeval sendtime[REQUEST_PER_TTL];
@@ -94,7 +95,7 @@ int main(int argc, char *argv[])
 		{
 			icmp_pack(send_buf, seq++);
 
-			gettimeofday(&sendtime[i], NULL);
+			gettimeofday(&sendtime[(seq - 1) % REQUEST_PER_TTL], NULL);
 			sendto(rawsock, sendbuf, ICMP_HEADER_LEN, 0, (struct sockaddr *)&addr, sizeof(addr));
 		}
 
@@ -105,10 +106,10 @@ int main(int argc, char *argv[])
 			int res = recvfrom(rawsock, recvbuf, BUFFER_SIZE, 0, 0, 0);
 			if(res < 0)
 			{
-				gettimeofday(&current, NULL);
-				if(time_difference(begin, current) > TIMEOUT) break;
 				continue;
 			}
+
+			gettimeofday(&current, NULL);
 
 			struct ip *iph = (struct ip *)recvbuf;
 			if(iph->ip_p != IPPROTO_ICMP)
@@ -117,6 +118,21 @@ int main(int argc, char *argv[])
 			}
 
 			struct icmp *icmph = (struct icmp *)(recvbuf + iph->ip_hl * 4);
+			if(icmph->icmp_type == ICMP_TIME_EXCEEDED)
+			{
+				
+			}
+			else if(icmph->icmp_type == ICMP_ECHOREPLY && icmph->icmp_id == pid)
+			{
+				struct ip *icmp_ip = (struct ip *)icmph->icmp_data;
+				icmph = (struct icmp *)(icmph->icmp_data + icmp_ip->ip_hl * 4);
+				if(icmph->icmp_id != pid)
+				{
+					continue;
+				}
+
+				totaltime += time_difference(sendtime[(icmph->icmp_seq - 1) % REQUEST_PER_TTL], currnet);
+			}
 			
 		}
 	}
