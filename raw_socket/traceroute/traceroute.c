@@ -33,20 +33,11 @@ void icmp_pack(struct icmp *icmph, int seq)
 	icmp->icmp_cksum = icmp_cksum((uint16_t *)icmph, ICMP_HEADER_LEN); // 此icmp报文没有数据，故只校验头部长度
 }
 
-double time_difference(struct timeval begin, struct timeval end)
+double icmp_tvsub(struct timeval start, struct timeval end)
 {
-	struct timeval tv;
-	tv.tv_sec = end.tv_sec - begin.tv_sec;
-	tv.tv_usec = end.tv_usec - begin.tv_usec;
-
-	if(tv.usec < 0)
-	{
-		tv.tv_sec--;
-		tv.tv_usec += 1000000;
-	}
-
-	return tv.tv_sec * 1000.0 + tv.tv_usec / 1000.0;
+	return (end.tv_sec - start.tv_sec) * 1000.0 + (end.tv_usec - start.tv_usec) / 1000.0;
 }
+
 
 
 
@@ -54,20 +45,19 @@ int main(int argc, char *argv[])
 {
 	if(argc != 2)
 	{
-		printf("usage: ./traceroute <IP address>\n");
+		printf("usage:./traceroute <address>\n");
 		return -1;
 	}
 
-	char dest_str[128];			// 目的主机字符串
-	memcpy(dest_str, argv[1], strlen(argv[1]) + 1);
+	pid = getpid();					// 获取当前进程ID
 
-	pid = getpid();				// 获取当前进程ID
-
-	struct sockaddr_in addr;
+	struct sockaddr_in addr;		// 地址结构
 	bzero(&addr, sizeof(addr));
+	
 	addr.sin_family = AF_INET;
-	inet_pton(AF_INET, dest_str, &addr.sin_addr);
+	inet_pton(AF_INET, argv[1], &addr.sin_addr);
 
+	// 原始套接字
 	int rawsock = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
 	if(rawsock < 0)
 	{
@@ -81,11 +71,36 @@ int main(int argc, char *argv[])
 	setsockopt(rawsock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)); // set time limit of socket's waiting for a packet
 
 	int seq = 1;
-	int recvcnt = 0;
 	double totaltime = 0.0;
 	
-	struct timeval begin, current;
-	struct timeval sendtime[REQUEST_PER_TTL];
+	struct timeval start, current;
+	struct timeval sendtimes[PACKETS_PER_HOP];
+
+	for(int ttl = 1; ttl <= TTL_LIMIT; ++ttl)
+	{
+		int replies = 0;
+		
+		setsockopt(rawsock, IPPROTO_IP, IP_TTL, &ttl, sizeof(ttl));
+		
+		for(int i = 0; i < PACKETS_PER_HOP; ++i)
+		{
+			icmp_pack(send_buf, seq++);
+			gettimeofday(&sendtimes[(seq - 1) % PACKETS_PER_HOP], NULL);
+			sendto(rawsock, send_buf, ICMP_HEADER_LEN, 0, (struct sockaddr *)&addr, sizeof(addr));
+		}
+
+		gettimeofday(&start, NULL); // get time after sending the packets
+
+		while(replies < PACKETS_PER_HOP)
+		{
+			int size = recvfrom(rawsock, recv_buf, BUFFER_SIZE, 0, NULL, NULL);
+			if(size < 0)
+			{
+				continue;
+			}
+		}
+	}
+	
 	
 	for(int ttl = 1; ttl <= TTL_LIMIT; ++ttl)
 	{
