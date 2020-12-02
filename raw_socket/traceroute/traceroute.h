@@ -2,6 +2,7 @@
 #include <string.h>
 
 #include <unistd.h>
+#include <signal.h>
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/time.h>
@@ -26,6 +27,8 @@ uint16_t icmp_cksum(uint16_t *data, int len);
 void icmp_pack(struct icmp *icmph, int seq);
 
 void icmp_unpack(uint8_t *data, int len);
+
+int icmp_recv(int rawsock, struct timeval *recvtime);
 
 /*
  *	@brief	计算时间差
