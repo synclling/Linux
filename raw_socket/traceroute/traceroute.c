@@ -44,6 +44,11 @@ void icmp_pack(struct icmp *icmph, int seq)
 
 int icmp_recv(int rawsock, struct timeval *recvtime)
 {
+	int iplen = 0;		// IP头部长度
+	
+	struct ip *iph = NULL;
+	struct icmp *icmph = NULL;
+	
 	gotalarm = 0;
 	alarm(3);
 
@@ -52,7 +57,7 @@ int icmp_recv(int rawsock, struct timeval *recvtime)
 		if(gotalarm == 1)
 			return (-3);
 
-		int size = recvfrom(rawsock, send_buf, BUFFER_SIZE, 0, NULL, NULL);
+		int size = recvfrom(rawsock, recv_buf, BUFFER_SIZE, 0, NULL, NULL);
 		if(size < 0)
 		{
 			if(errno == EINTR)
@@ -61,27 +66,31 @@ int icmp_recv(int rawsock, struct timeval *recvtime)
 				perror("recv error");
 		}
 
-		struct ip *iph = (struct ip *)recvbuf;
+		iph = (struct ip *)recv_buf;
+		iplen = iph->ip_hl * 4;
+		
 		if(iph->ip_p != IPPROTO_ICMP)
 		{
 			continue;
 		}
-
-		struct icmp *icmph = (struct icmp *)(recvbuf + iph->ip_hl * 4);
-		if(icmph->icmp_type == ICMP_TIME_EXCEEDED)
+		
+		icmph = (struct icmp *)(recv_buf + iplen);
+		if(size - iplen < 8)
 		{
-				
+			continue;
+		}
+
+		if(icmph->icmp_type == ICMP_TIME_EXCEEDED && icmph->icmp_code == ICMP_TIMXCEED_INTRANS)
+		{
+			printf(" %s ", iph->ip_src);
+			gettimeofday(&recvtime, NULL);
+			return -2;
 		}
 		else if(icmph->icmp_type == ICMP_ECHOREPLY && icmph->icmp_id == pid)
 		{
-			struct ip *icmp_ip = (struct ip *)icmph->icmp_data;
-			icmph = (struct icmp *)(icmph->icmp_data + icmp_ip->ip_hl * 4);
-			if(icmph->icmp_id != pid)
-			{
-				continue;
-			}
-
-			totaltime += time_difference(sendtime[(icmph->icmp_seq - 1) % REQUEST_PER_TTL], currnet);
+			printf(" %s ", iph->ip_src);
+			gettimeofday(&recvtime, NULL);
+			return -1;
 		}
 	}
 }
@@ -126,75 +135,41 @@ int main(int argc, char *argv[])
 	setsockopt(rawsock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)); // set time limit of socket's waiting for a packet
 
 	int seq = 1;
+	double rtt = 0.0;
 	
 	struct timeval sendtime;
 	struct timeval recvtime;
 
 	for(int ttl = 1; ttl <= TTL_LIMIT; ++ttl)
 	{
-		int replies = 0;
+		printf(" %d ", ttl);
 		
 		setsockopt(rawsock, IPPROTO_IP, IP_TTL, &ttl, sizeof(ttl));
 		
 		for(int i = 0; i < PACKETS_PER_HOP; ++i)
 		{
-			icmp_pack(send_buf, seq++);
 			gettimeofday(&sendtime, NULL);
+			
+			icmp_pack(send_buf, seq++);
 			sendto(rawsock, send_buf, ICMP_HEADER_LEN, 0, (struct sockaddr *)&addr, sizeof(addr));
 
 			int res = icmp_recv(rawsock, &recvtime);
+			if(res == -3)
+			{
+				printf(" *");
+			}
+			else if(res == -2)
+			{
+				rtt = icmp_tvsub(sendtime, recvtime);
+				printf(" %.3f ms", rtt);
+			}
+			else if(res == -1)
+			{
+			}
 		}
 
+		printf("\n");
 	}
 	
-	
-	for(int ttl = 1; ttl <= TTL_LIMIT; ++ttl)
-	{
-		setsockopt(rawsock, IPPROTO_IP, IP_TTL, &ttl, sizeof(ttl));
-
-		for(int i = 0; i < REQUEST_PER_TTL; ++i)
-		{
-			icmp_pack(send_buf, seq++);
-
-			gettimeofday(&sendtime[(seq - 1) % REQUEST_PER_TTL], NULL);
-			sendto(rawsock, sendbuf, ICMP_HEADER_LEN, 0, (struct sockaddr *)&addr, sizeof(addr));
-		}
-
-		gettimeofday(&begin, NULL); // get time after sending the packets
-
-		while(recvcnt < REQUEST_PER_TTL)
-		{
-			int res = recvfrom(rawsock, recvbuf, BUFFER_SIZE, 0, 0, 0);
-			if(res < 0)
-			{
-				continue;
-			}
-
-			gettimeofday(&current, NULL);
-
-			struct ip *iph = (struct ip *)recvbuf;
-			if(iph->ip_p != IPPROTO_ICMP)
-			{
-				continue;
-			}
-
-			struct icmp *icmph = (struct icmp *)(recvbuf + iph->ip_hl * 4);
-			if(icmph->icmp_type == ICMP_TIME_EXCEEDED)
-			{
-				
-			}
-			else if(icmph->icmp_type == ICMP_ECHOREPLY && icmph->icmp_id == pid)
-			{
-				struct ip *icmp_ip = (struct ip *)icmph->icmp_data;
-				icmph = (struct icmp *)(icmph->icmp_data + icmp_ip->ip_hl * 4);
-				if(icmph->icmp_id != pid)
-				{
-					continue;
-				}
-
-				totaltime += time_difference(sendtime[(icmph->icmp_seq - 1) % REQUEST_PER_TTL], currnet);
-			}
-			
-		}
-	}
+	return 0;
 }
