@@ -135,12 +135,13 @@ int main(int argc, char *argv[])
 	setsockopt(rawsock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)); // set time limit of socket's waiting for a packet
 
 	int seq = 1;
+	int done = 0;
 	double rtt = 0.0;
 	
 	struct timeval sendtime;
 	struct timeval recvtime;
 
-	for(int ttl = 1; ttl <= TTL_LIMIT; ++ttl)
+	for(int ttl = 1; ttl <= TTL_LIMIT && done == 0; ++ttl)
 	{
 		printf(" %d ", ttl);
 		
@@ -165,6 +166,9 @@ int main(int argc, char *argv[])
 			}
 			else if(res == -1)
 			{
+				rtt = icmp_tvsub(sendtime, recvtime);
+				printf(" %.3f ms", rtt);
+				++done;
 			}
 		}
 
