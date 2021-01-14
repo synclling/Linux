@@ -46,27 +46,27 @@ void client(int readfd, int writefd)
 	size_t len;
 	ssize_t n;
 
-	char buf[MAX_LINE];
-	fgets(buf, MAX_LINE, stdin);
+	char buf[MAXLINE];
 
+	fgets(buf, MAXLINE, stdin);
 	len = strlen(buf);
 	if(buf[len - 1] == '\n')
 		--len;
 
 	write(writefd, buf, len);
 
-	while((n = read(readfd, buf, MAX_LINE)) > 0)
-		write(stdout, buf, n);
+	while((n = read(readfd, buf, MAXLINE)) > 0)
+		write(STDOUT_FILENO, buf, n);
 }
 
 void server(int readfd, int writefd)
 {
-	int fd;
+	int fd;		// file fd
 
 	ssize_t n;
-	char buf[MAX_LINE + 1];
+	char buf[MAXLINE + 1];
 
-	if((n = read(readfd, buf, MAX_LINE)) == 0)
+	if((n = read(readfd, buf, MAXLINE)) == 0)
 		err_quit("end-of-file while reading pathname");
 	buf[n] = '\0';
 
@@ -75,7 +75,7 @@ void server(int readfd, int writefd)
 		n = strlen(buf);
 		write(writefd, buf, n);
 	} else {
-		while((n = read(fd, buf, MAX_LINE)) > 0)
+		while((n = read(fd, buf, MAXLINE)) > 0)
 			write(writefd, buf, n);
 		close(fd);
 	}
