@@ -15,14 +15,8 @@
 #include <sys/stat.h>		/* for S_xxx file mode constants */
 #include <sys/wait.h>
 
-
-#ifdef HAVE_SYS_IPC_H
 #include <sys/ipc.h>		/* System V IPC */
-#endif
-
-#ifdef HAVE_SYS_MSG_H
 #include <sys/msg.h>		/* System V message queues */
-#endif
 
 
 
@@ -35,6 +29,8 @@
 #define DIR_MODE	(FILE_MODE | S_IXUSR | S_IXGRP | S_IXOTH)
 
 /* default permissions for new System V message queues */
+#define MSG_R		0400
+#define MSG_W		0200
 #define SVMSG_MODE	(MSG_R | MSG_W | MSG_R >> 3 | MSG_R >> 6)
 
 
