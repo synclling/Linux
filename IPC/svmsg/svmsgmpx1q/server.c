@@ -9,19 +9,20 @@ void server(int readfd, int writefd)
 	struct mymesg mesg;
 
 	for(;;) {
+		/* read pathname from IPC channel */
 		mesg.mesg_type = 1;
 		if((n = mesg_recv(readfd, &mesg)) == 0) {
 			err_msg("pathname missing");
 			continue;
 		}
-		mesg.mesg_data[n] = '\0';
+		mesg.mesg_data[n] = '\0';	// null terminate pathname
 
 		if((ptr = strchr(mesg.mesg_data, ' ')) == NULL) {
 			err_msg("bogus request: %s", mesg.mesg_data);
 			continue;
 		}
 
-		*ptr++ = 0;
+		*ptr++ = 0;		// null terminate PID, ptr = pathname
 		pid = atol(mesg.mesg_data);
 		mesg.mesg_type = pid;
 
