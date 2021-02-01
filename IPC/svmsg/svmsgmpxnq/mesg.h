@@ -20,8 +20,15 @@ ssize_t mesg_send(int id, struct mymesg *mptr)
 
 ssize_t mesg_recv(int id, struct mymesg *mptr)
 {
-	ssize_t n = msgrcv(id, &(mptr->mesg_type), MAXMESGDATA, mptr->mesg_type, 0);
-	mptr->mesg_len = n;
+	ssize_t n;
+
+	do {
+		n = msgrcv(id, &(mptr->mesg_type), MAXMESGDATA, mptr->mesg_type, 0);
+		mptr->mesg_len = n;
+	} while(n == -1 && errno == EINTR);
+
+	if(n == -1)
+		err_sys("mesg_recv error");
 
 	return (n);
 }
