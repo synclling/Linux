@@ -18,6 +18,7 @@
 #include <sys/ipc.h>		/* System V IPC */
 #include <sys/msg.h>		/* System V message queues */
 
+#include <pthread.h>
 
 
 #define MAXLINE		4096
@@ -35,6 +36,8 @@
 
 
 
+#define min(a, b) ((a) < (b)? (a) : (b))
+#define max(a, b) ((a) > (b)? (a) : (b))
 
 
 /* error.c */
