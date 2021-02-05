@@ -1,6 +1,6 @@
-#include "pthread_rwlock.h"
+#include "my_rwlock.h"
 
-int pthread_rwlock_init(pthread_rwlock_t *rw, pthread_rwlockattr_t *attr)
+int my_rwlock_init(my_rwlock_t *rw, my_rwlockattr_t *attr)
 {
 	if(attr != NULL)
 		return (EINVAL);		// not supported
@@ -26,4 +26,3 @@ err2:
 err1:
 	return (result);
 }
-

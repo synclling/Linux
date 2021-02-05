@@ -1,6 +1,6 @@
-#include "pthread_rwlock.h"
+#include "my_rwlock.h"
 
-int pthread_rwlock_destroy(pthread_rwlock_t *rw)
+int my_rwlock_destroy(my_rwlock_t *rw)
 {
 	if(rw->rw_magic != RW_MAGIC)
 		return (EINVAL);
@@ -15,4 +15,3 @@ int pthread_rwlock_destroy(pthread_rwlock_t *rw)
 
 	return (0);
 }
-

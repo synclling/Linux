@@ -1,6 +1,6 @@
-#include "pthread_rwlock.h"
+#include "my_rwlock.h"
 
-int pthread_rwlock_wrlock(pthread_rwlock_t *rw)
+int my_rwlock_wrlock(my_rwlock_t *rw)
 {
 	if(rw->rw_magic != RW_MAGIC)
 		return (EINVAL);

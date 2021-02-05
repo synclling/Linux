@@ -1,6 +1,6 @@
-#include "pthread_rwlock.h"
+#include "my_rwlock.h"
 
-int pthread_rwlock_rdlock(pthread_rwlock_t *rw)
+int my_rwlock_rdlock(my_rwlock_t *rw)
 {
 	if(rw->rw_magic != RW_MAGIC)
 		return (EINVAL);
@@ -24,4 +24,3 @@ int pthread_rwlock_rdlock(pthread_rwlock_t *rw)
 	pthread_mutex_unlock(&rw->rw_mutex);
 	return (result);
 }
-
