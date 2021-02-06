@@ -1,7 +1,6 @@
-#ifndef __PTHREAD_RWLOCK_H__
-#define __PTHREAD_RWLOCK_H__
+#ifndef __MY_RWLOCK_H__
+#define __MY_RWLOCK_H__
 
-#include "ipc.h"
 
 typedef struct {
 	pthread_mutex_t		rw_mutex;			// basic lock

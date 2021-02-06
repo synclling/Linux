@@ -1,3 +1,4 @@
+#include "ipc.h"
 #include "my_rwlock.h"
 
 int my_rwlock_wrlock(my_rwlock_t *rw)
