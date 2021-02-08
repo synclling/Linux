@@ -17,10 +17,9 @@ int main(int argc, char *argv[])
 	my_rwlock_init(&rwlock, NULL);
 
 	pthread_create(&tid1, NULL, thread1, NULL);
-
 	sleep(1);
-
 	pthread_create(&tid2, NULL, thread2, NULL);
+	
 	pthread_join(tid2, &status);
 	if(status != PTHREAD_CANCELED)
 		printf("thread2 status = %p\n", status);

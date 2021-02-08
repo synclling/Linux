@@ -31,7 +31,7 @@ int my_rwlock_rdlock(my_rwlock_t *rw)
 			break;
 	}
 	if(result == 0)
-		rw->rw_refcount++;
+		rw->rw_refcount++;		// reader has a read-lock
 
 	pthread_mutex_unlock(&rw->rw_mutex);
 	return (0);

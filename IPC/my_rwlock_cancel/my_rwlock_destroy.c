@@ -12,7 +12,7 @@ int my_rwlock_destroy(my_rwlock_t *rw)
 	pthread_mutex_destroy(&rw->rw_mutex);
 	pthread_cond_destroy(&rw->rw_condreaders);
 	pthread_cond_destroy(&rw->rw_condwriters);
-	rw->rw_refcount = 0;
+	rw->rw_magic = 0;
 
 	return (0);
 }

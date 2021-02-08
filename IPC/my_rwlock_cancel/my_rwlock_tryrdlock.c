@@ -11,10 +11,10 @@ int my_rwlock_tryrdlock(my_rwlock_t *rw)
 	if((result = pthread_mutex_lock(&rw->rw_mutex)) != 0)
 		return (result);
 
-	if(rw->rw_refcount < 0 || rw->rw_nwaitwriters > 0)
+	if(rw->rw_refcount == -1 || rw->rw_nwaitwriters > 0)
 		result = EBUSY;
 	else
-		rw->rw_refcount++;
+		rw->rw_refcount++;		// increment count of reader locks
 
 	pthread_mutex_unlock(&rw->rw_mutex);
 	return (result);

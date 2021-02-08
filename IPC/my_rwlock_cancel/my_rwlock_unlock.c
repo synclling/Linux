@@ -19,8 +19,7 @@ int my_rwlock_unlock(my_rwlock_t *rw)
 		err_dump("rw_refcount = %d", rw->rw_refcount);
 
 	if(rw->rw_nwaitwriters > 0) {
-		if(rw->rw_refcount == 0)
-			result = pthread_cond_signal(&rw->rw_condwriters);
+		result = pthread_cond_signal(&rw->rw_condwriters);
 	} else if(rw->rw_nwaitreaders > 0) {
 		result = pthread_cond_broadcast(&rw->rw_condreaders);
 	}
